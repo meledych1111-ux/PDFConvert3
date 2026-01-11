@@ -13,7 +13,23 @@
       background: #f5f5f7;
       color: #1d1d1f;
     }
-    input, button {
+    .control-group {
+      margin: 12px 0;
+    }
+    label {
+      display: block;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    input[type="range"] {
+      width: 100%;
+    }
+    .value-display {
+      text-align: right;
+      color: #007aff;
+      font-size: 14px;
+    }
+    input[type="file"], button {
       width: 100%;
       padding: 12px;
       margin: 10px 0;
@@ -27,26 +43,36 @@
       border: none;
       font-weight: bold;
     }
-    button:disabled {
-      background: #c7c7cc;
+    #saveBtn {
+      background: #34c759;
+      display: none;
     }
     #status {
       margin-top: 10px;
       color: #6e6e73;
       font-size: 14px;
     }
-    #saveBtn {
-      display: none;
-      background: #34c759;
-    }
   </style>
 </head>
 <body>
   <h2>Сжать PDF на iPhone</h2>
-  <p>Подходит для сканов и фото-документов.</p>
-  
+  <p>Настройте параметры под свои нужды.</p>
+
   <input type="file" id="fileInput" accept=".pdf" />
-  <button id="compressBtn" disabled>Сжать</button>
+
+  <div class="control-group">
+    <label for="scaleSlider">📏 Разрешение страницы: <span id="scaleValue">0.6</span>x</label>
+    <input type="range" id="scaleSlider" min="0.3" max="1.0" step="0.05" value="0.6" />
+    <div class="value-display">меньше → меньше файл</div>
+  </div>
+
+  <div class="control-group">
+    <label for="qualitySlider">🖼️ Качество изображения: <span id="qualityValue">0.7</span></label>
+    <input type="range" id="qualitySlider" min="0.3" max="0.95" step="0.05" value="0.7" />
+    <div class="value-display">ниже → сильнее сжатие</div>
+  </div>
+
+  <button id="compressBtn" disabled>Сжать PDF</button>
   <div id="status"></div>
   <button id="saveBtn">💾 Сохранить в «Файлы»</button>
 
@@ -59,10 +85,24 @@
 
     let compressedBlob = null;
 
+    // Элементы управления
     const fileInput = document.getElementById('fileInput');
     const compressBtn = document.getElementById('compressBtn');
     const saveBtn = document.getElementById('saveBtn');
     const statusEl = document.getElementById('status');
+
+    const scaleSlider = document.getElementById('scaleSlider');
+    const qualitySlider = document.getElementById('qualitySlider');
+    const scaleValue = document.getElementById('scaleValue');
+    const qualityValue = document.getElementById('qualityValue');
+
+    // Обновление отображаемых значений
+    scaleSlider.addEventListener('input', () => {
+      scaleValue.textContent = parseFloat(scaleSlider.value).toFixed(2);
+    });
+    qualitySlider.addEventListener('input', () => {
+      qualityValue.textContent = parseFloat(qualitySlider.value).toFixed(2);
+    });
 
     fileInput.addEventListener('change', () => {
       compressBtn.disabled = !fileInput.files.length;
@@ -71,6 +111,9 @@
     compressBtn.addEventListener('click', async () => {
       const file = fileInput.files[0];
       if (!file) return;
+
+      const scale = parseFloat(scaleSlider.value);
+      const quality = parseFloat(qualitySlider.value);
 
       try {
         statusEl.textContent = 'Загрузка PDF...';
@@ -85,7 +128,6 @@
           statusEl.textContent = `Стр. ${i} из ${totalPages}...`;
 
           const page = await pdf.getPage(i);
-          const scale = 0.6;
           const viewport = page.getViewport({ scale });
 
           const canvas = document.createElement('canvas');
@@ -95,7 +137,7 @@
 
           await page.render({ canvasContext: ctx, viewport }).promise;
 
-          const imgData = canvas.toDataURL('image/jpeg', 0.7);
+          const imgData = canvas.toDataURL('image/jpeg', quality);
           canvas.remove();
 
           if (i === 1) {
@@ -110,29 +152,20 @@
           doc.addImage(imgData, 'JPEG', 0, 0, viewport.width, viewport.height);
         }
 
-        statusEl.textContent = 'Готово!';
+        statusEl.textContent = '✅ Готово!';
         compressedBlob = doc.output('blob');
-
-        // Показываем кнопку "Сохранить"
         saveBtn.style.display = 'block';
       } catch (err) {
         console.error(err);
-        statusEl.innerHTML = '❌ Ошибка: ' + (err.message || 'неизвестно');
+        statusEl.innerHTML = '❌ Ошибка: ' + (err.message || 'не удалось обработать PDF');
       }
     });
 
-    // 🔑 Ключевой момент: открытие blob-URL в новом окне
     saveBtn.addEventListener('click', () => {
       if (!compressedBlob) return;
-      
-      // Создаём URL и открываем в новой вкладке
       const url = URL.createObjectURL(compressedBlob);
-      
-      // Safari на iOS сохранит PDF при открытии blob-URL
       window.open(url, '_blank');
-      
-      // Подсказка пользователю
-      statusEl.innerHTML = '✅ Откройте вкладку выше → нажмите «Поделиться» → «Сохранить в Файлы»';
+      statusEl.innerHTML = '✅ Откройте новую вкладку → «Поделиться» → «Сохранить в Файлы»';
     });
   </script>
 </body>
